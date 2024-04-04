@@ -2,4 +2,5 @@
 Dit is een opdracht van Pjotr En Sennen.
 
 ## Links
-- [Week 8 opdracht](Week8.html)
+- [Regressie Model](Reg.html)
+- [Classificatie Model](Class.html)
