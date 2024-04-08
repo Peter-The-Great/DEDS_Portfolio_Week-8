@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "deds-portfolio-week-8"
+name = "deds-portfolio-week-8-9"
 version = "1.0"
 description = "Onze Week 8 opdracht voor Machine Learning"
 authors = ["Peter-The-Great <PjotrW15@Gmail.com>"]
