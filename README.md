@@ -4,3 +4,4 @@ Dit is een opdracht van Pjotr En Sennen.
 ## Links
 - [Regressie Model](Reg.html)
 - [Classificatie Model](Class.html)
+- [Clustering Model](Clust.html)
