@@ -136,6 +136,12 @@ df.groupby('Centrum', as_index = False)['Centrum'].count()
 # %% [markdown]
 # # De Sales Branches clusteren
 # 
+# Om de segmenten van de verkoopafdelingen te bepalen, gaan we de volgende stappen doorlopen:
+# - We kunnen de segmenten op basis van producten categorieën en het verkoop van die producten, bepalen welke segmenten we nodig zullen hebben voor onze verkoopafdeling.
+# - Daarna zullen we gebaseerd op de omzet en kosten van de verkoopafdelingen, de segmenten bepalen.
+# - Waar we dan de gemixte data in een clustering model zullen stoppen en de segmenten bepalen.
+# 
+# Eerst gaan we de data inladen.
 
 # %%
 # Verbinding maken met de databases
@@ -143,37 +149,84 @@ conn_sales = sqlite3.connect('data/go_sales.sqlite')
 conn_crm = sqlite3.connect('data/go_crm.sqlite')
 conn_staff = sqlite3.connect('data/go_staff.sqlite')
 
-# Gegevens ophalen uit de databases
-sales_branch = pd.read_sql_query("SELECT * FROM sales_branch", conn_staff)
-country1 = pd.read_sql_query("SELECT * FROM country", conn_sales)
-country2 = pd.read_sql_query("SELECT * FROM country", conn_crm)
-territory = pd.read_sql_query("SELECT * FROM sales_territory", conn_crm)
+# Gegevens ophalen uit de databases (Helaas verouderd)
+# sales_branch = pd.read_sql_query("SELECT * FROM sales_branch", conn_staff)
+# country1 = pd.read_sql_query("SELECT * FROM country", conn_sales)
+# country2 = pd.read_sql_query("SELECT * FROM country", conn_crm)
+# territory = pd.read_sql_query("SELECT * FROM sales_territory", conn_crm)
+
+orders_header = pd.read_sql_query("SELECT * FROM order_header;", conn_sales)
+order_details = pd.read_sql_query("SELECT * FROM order_details;", conn_sales)
 
 # %% [markdown]
 # Hier gaan we de data van de great outdoors inlezen en bepaalde data dropen.
 
 # %%
-country = country1[['CURRENCY_NAME', 'LANGUAGE']]
-country = pd.concat([country2, country], axis = 1)
-sales_branch.drop('TRIAL633', axis=1, inplace=True)
-country.drop('TRIAL219', axis=1, inplace=True)
-territory.drop('TRIAL222', axis=1, inplace=True)
+# (Helaas Verouderd)
+# country = country1[['CURRENCY_NAME', 'LANGUAGE']]
+# country = pd.concat([country2, country], axis = 1)
+# sales_branch.drop('TRIAL633', axis=1, inplace=True)
+# country.drop('TRIAL219', axis=1, inplace=True)
+# territory.drop('TRIAL222', axis=1, inplace=True)
+orders_header.drop('TRIAL885', axis=1, inplace=True)
+order_details.drop('TRIAL879', axis=1, inplace=True)
 
 # %% [markdown]
-# Nu gaan we mergen.
+# Nu gaan we data mergen. Orders worden samengevoegd met details om een compleet beeld van de bestellingen te krijgen.
+# 
+# Productinformatie wordt geladen en samengevoegd om een lookup-tabel te maken voor productnummers naar productcategorieën.
+# 
+# Verkoopgegevens worden voorbereid, zoals de omzet- en afzetgegevens per verkoopfiliaal en de verhouding van de verkoop per productlijn.
+# 
+# Bij de productlijn wordt ook dummy encoding toegepast.
 
 # %%
-table = pd.merge(country, territory, left_on='SALES_TERRITORY_CODE', right_on='SALES_TERRITORY_CODE', how='left')
-table = pd.merge(sales_branch, table, left_on='COUNTRY_CODE', right_on='COUNTRY_CODE', how='left')
-table
+order_full = pd.merge(order_details, orders_header, on='ORDER_NUMBER')
+order_full['UNIT_SALE_PRICE'] = order_full['UNIT_SALE_PRICE'].astype(float)
+order_full['UNIT_PRICE'] = order_full['UNIT_PRICE'].astype(float)
+order_full['UNIT_COST'] = order_full['UNIT_COST'].astype(float)
+
+# Lees productstabellen
+product = pd.read_sql_query("SELECT * FROM product;", conn_sales)
+product_type = pd.read_sql_query("SELECT * FROM product_type;", conn_sales)
+product_line = pd.read_sql_query("SELECT * FROM product_line;", conn_sales)
+
+# Maak lookuptabel voor productnumber -> naam productscategorie
+product_line_lookup = pd.merge(product, product_type, on='PRODUCT_TYPE_CODE')
+product_line_lookup = pd.merge(product_line_lookup, product_line, on='PRODUCT_LINE_CODE')
+product_line_lookup = product_line_lookup.loc[:,['PRODUCT_NUMBER', 'PRODUCT_LINE_EN']]
+
+# Maak dummies van product_line
+product_line_dummies = pd.get_dummies(product_line_lookup['PRODUCT_LINE_EN'])
+
+product_line_lookup = product_line_lookup.drop(['PRODUCT_LINE_EN'], axis=1)
+product_line_lookup = pd.concat([product_line_dummies, product_line_lookup], axis = 1)
+
+# Omzet/Afzetsdata
+sales_profit_data = order_full.groupby('SALES_BRANCH_CODE').aggregate('sum') #.reset_index()
+sales_profit_data = sales_profit_data[['QUANTITY', 'UNIT_COST', 'UNIT_PRICE', 'UNIT_SALE_PRICE']]
+
+# Productsverkoopdata (Verhouding van verkoop per productlijn)
+sales_product_data = pd.merge(order_full, product_line_lookup, on='PRODUCT_NUMBER')
+sales_product_data = sales_product_data[['SALES_BRANCH_CODE', 'Camping Equipment', 'Golf Equipment', 'Mountaineering Equipment', 'Outdoor Protection' , 'Personal Accessories']]
+sales_product_data = sales_product_data.groupby('SALES_BRANCH_CODE').aggregate(np.mean)
+
+# %% [markdown]
+# ## Clusteringmodel bouwen met 2 dimensies
+# 
+# Eerst wordt een 2D-dataset gemaakt met hoeveelheid en eenheidsprijs van de verkochte producten.
+# 
+# Waar we ook dummy encoding toepassen.
 
 # %%
-table = table[['CURRENCY_NAME', 'COUNTRY_EN', 'TERRITORY_NAME_EN']]
+table = sales_profit_data[['QUANTITY', 'UNIT_SALE_PRICE']]
 df = pd.get_dummies(table)  # Dummy encoding
-df.dropna(inplace=True)  # Optioneel: verwijder rijen met ontbrekende waarden
 
 table = pd.concat([table, df], axis=1)
 table
+
+# %% [markdown]
+# Een k-means clusteringmodel wordt geïnstantieerd met het gewenste aantal clusters (3 of 4 in het eerste geval, met een willenkeurigheid van 42) en toegepast op de 2D-dataset.
 
 # %%
 # Train het clustermodel
@@ -188,6 +241,11 @@ for i in range(len(kmeans_centra.columns)):
     kmeans_centra = kmeans_centra.rename(columns = {i : f'{df.columns[i]}'})
     
 kmeans_centra
+
+# %% [markdown]
+# De centra van de clusters worden geëxtraheerd en weergegeven.
+# Voor elk punt in de dataset wordt de afstand tot elk clustercentrum berekend, en het punt wordt toegewezen aan het dichtstbijzijnde cluster.
+# 
 
 # %%
 for src_index, _ in df.iterrows():
@@ -217,8 +275,95 @@ for src_index, _ in df.iterrows():
 
 df
 
+# %% [markdown]
+# De resultaten worden gevisualiseerd door een scatterplot te maken van de kwantiteit versus de eenheidsprijs, waarbij de punten zijn gekleurd op basis van hun toegewezen cluster.
+
 # %%
-plt.scatter(table['TERRITORY_NAME_EN'], table['CURRENCY_NAME'], c = prediction_results, cmap = 'rainbow')
+# (Helaas verouderd)
+# plt.scatter(table['TERRITORY_NAME_EN'], table['CURRENCY_NAME'], c = prediction_results, cmap = 'rainbow')
+# plt.show()
+
+plt.scatter(df['QUANTITY'], df['UNIT_SALE_PRICE'], color = 'k')
+plt.show()
+
+# %% [markdown]
+# De centra van de clusters worden geëxtraheerd en weergegeven.
+
+# %%
+df_2d.groupby('Centrum', as_index = False)['Centrum'].count()
+
+# %% [markdown]
+# ## Clusteringmodel bouwen met meer dan 2 dimensies (alle kolommen uit de dataset)
+# 
+# Nu gaan we hetzelfde doen als hierboven, maar dan met alle kolommen uit de dataset. En misschien ook verder testen met verschillende k's.
+
+# %%
+kmeans = KMeans(n_clusters = 5, random_state = 42)
+prediction_results = kmeans.fit_predict(sales_product_data)
+prediction_results
+
+# %%
+sales_product_data['Centrum'] = prediction_results
+sales_product_data
+
+# %%
+sales_product_data.groupby('Centrum', as_index = False)['Centrum'].count()
+
+# %% [markdown]
+# Hier visualiseren we de gemiddelde verkoop van verschillende productcategorieën binnen elk cluster.
+
+# %%
+cluster_sales_mean = sales_product_data.groupby('Centrum').mean()
+
+# Visualisatie van gemiddelde verkoop per cluster
+plt.figure(figsize=(10, 6))
+plt.bar(cluster_sales_mean.index, cluster_sales_mean['Camping Equipment'], label='Camping Equipment')
+plt.bar(cluster_sales_mean.index, cluster_sales_mean['Golf Equipment'], bottom=cluster_sales_mean['Camping Equipment'], label='Golf Equipment')
+plt.bar(cluster_sales_mean.index, cluster_sales_mean['Mountaineering Equipment'], bottom=cluster_sales_mean['Camping Equipment']+cluster_sales_mean['Golf Equipment'], label='Mountaineering Equipment')
+plt.bar(cluster_sales_mean.index, cluster_sales_mean['Outdoor Protection'], bottom=cluster_sales_mean['Camping Equipment']+cluster_sales_mean['Golf Equipment']+cluster_sales_mean['Mountaineering Equipment'], label='Outdoor Protection')
+plt.bar(cluster_sales_mean.index, cluster_sales_mean['Personal Accessories'], bottom=cluster_sales_mean['Camping Equipment']+cluster_sales_mean['Golf Equipment']+cluster_sales_mean['Mountaineering Equipment']+cluster_sales_mean['Outdoor Protection'], label='Personal Accessories')
+plt.xlabel('Cluster')
+plt.ylabel('Gemiddelde verkoop')
+plt.title('Gemiddelde verkoop per cluster per productcategorie')
+plt.legend()
+plt.show()
+
+# %% [markdown]
+# ## Evaluatie van de clustering
+
+# %% [markdown]
+# Hier gaan we de inter- en intraclusterafstand berekenen voor verschillende k's.
+
+# %%
+# Lijst om interclusterafstanden op te slaan
+intercluster_distances = []
+
+# Lijst om intraclusterafstanden op te slaan
+intracluster_distances = []
+
+# Lijst van verschillende k's om te evalueren
+k_values = [2, 3, 4, 5, 6]
+
+for k in k_values:
+    # K-means clusteringmodel toepassen
+    kmeans = KMeans(n_clusters=k, random_state=42)
+    prediction_results = kmeans.fit_predict(sales_product_data)
+    
+    # Interclusterafstand
+    intercluster_distance = np.sum(np.min(kmeans.transform(sales_product_data), axis=1)) / sales_product_data.shape[0]
+    intercluster_distances.append(intercluster_distance)
+    
+    # Intraclusterafstand
+    intracluster_distance = kmeans.inertia_ / sales_product_data.shape[0]
+    intracluster_distances.append(intracluster_distance)
+
+# Visualisatie van inter- en intraclusterafstanden voor verschillende k's
+plt.plot(k_values, intercluster_distances, marker='o', label='Intercluster distance')
+plt.plot(k_values, intracluster_distances, marker='x', label='Intracluster distance')
+plt.xlabel('Number of clusters (k)')
+plt.ylabel('Distance')
+plt.title('Inter- and Intracluster distances for different k values')
+plt.legend()
 plt.show()
 
 
