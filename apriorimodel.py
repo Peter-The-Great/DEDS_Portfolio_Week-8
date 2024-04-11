@@ -24,7 +24,6 @@ import numpy as np
 import pandas as pd 
 from mlxtend.frequent_patterns import apriori, association_rules
 import sqlite3
-import apriori_python as ap
 import matplotlib.pyplot as plt
 
 # %% [markdown]
@@ -47,6 +46,8 @@ products
 
 # %% [markdown]
 # Hier gaan we de data mergen en de data met product id's en product namen samenvoegen. Die product namen zijn allemaal one hot encoded.
+# 
+# Daarna geven we de meest voorkomende producten weer. Die sorteren we en zetten in een balk grafiek.
 
 # %%
 # Merge de order_details en products tabellen op PRODUCT_NUMBER
@@ -68,6 +69,13 @@ plt.bar(x = range(0, 30), height = sorted_itemsets['support'][0:30], tick_label 
 plt.xticks(rotation=90)
 plt.show()
 
+
+# %% [markdown]
+# Hier worden de regels gegenereerd met behulp van de frequent_itemsets en de lift-metriek, daarmee kunnen we de regels sorteren op basis van de lift-waarden.
+# 
+# Lift waarden zijn een maat voor hoeveel meer de items samen worden gekocht dan verwacht op basis van de afzonderlijke support-waarden.
+# 
+# Hierna sorteren we de regels op basis van de lift-waarden en de confidence-waarden.
 
 # %%
 rules = association_rules(frequent_itemsets, metric="lift", min_threshold=1)
