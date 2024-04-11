@@ -2,6 +2,7 @@
 Dit is een opdracht van Pjotr En Sennen.
 
 ## Links
-- [Regressie Model](Reg.html)
-- [Classificatie Model](Class.html)
-- [Clustering Model](Clust.html)
+- [Regressie Model](regressionmodel.html)
+- [Classificatie Model](classificationmodel.html)
+- [Clustering Model](clusteringmodel.html)
+- [Association Rules Model](apriorimodel.html)

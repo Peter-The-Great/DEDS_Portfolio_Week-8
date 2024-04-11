@@ -3,8 +3,6 @@
 # 
 # Van Pjotr en Sennen
 # 
-# Hierin maken we de opdrachten 8.1 en 8.2. We hebben de opdrachten samen gemaakt en hebben de code ook samen geschreven. We hebben de code in een notebook gezet en de code is uitgevoerd in een Jupyter Notebook.
-# 
 # De opdracht van deze week is:
 # 
 # Great Outdoors wil graag weten hoeveel zij gaat verkopen op basis van een set onafhankelijke variabelen. Daarom wil zij een model trainen op basis van reeds bekende data, zodat deze volgend jaar in gebruik kan worden genomen. Je doet dus het volgende met de reeds bekende data:
@@ -48,8 +46,8 @@ header = pd.read_sql(con=conn, sql='SELECT * FROM order_header')
 product = pd.read_sql_query("SELECT * FROM product;", conn)
 
 # Drop de kolommen die niet nodig zijn en irrelevant.
-details = details.drop(columns=['TRIAL879'])
-header = header.drop(columns=['TRIAL885'])
+details = details[details.columns.drop(list(details.filter(regex="TRIAL")))]
+header = header[header.columns.drop(list(header.filter(regex="TRIAL")))]
 
 # %% [markdown]
 # Hierna mergen we de order details en header met elkaar. Dit doen we op basis van de order id. We mergen de inventory met de order details en header op basis van de product id. We mergen de forecast met de inventory op basis van de product id.
@@ -198,9 +196,12 @@ y_test_prediction_merge.loc[y_test_prediction_merge['predicted_quantity'].notna(
 # Nu wordt het regressie model in beeld gebracht. Nu zal via de grafiek te zien zijn hoe goed het model is. Dit doen we door gebruik te maken van pyplot en seaborn.
 
 # %%
-plt.scatter(y_test_prediction_merge['quantity'], y_test_prediction_merge['predicted_quantity'])
-plt.xlabel('quantity')
-plt.ylabel('predicted_quantity')
+colors = np.interp(y_test_prediction_merge["quantity"], (y_test_prediction_merge["quantity"].min(), y_test_prediction_merge["quantity"].max()), (0, 66))
+plt.scatter(y_test_prediction_merge['quantity'], y_test_prediction_merge['predicted_quantity'], s=5, c=colors, cmap="turbo", alpha=0.8)
+plt.xlabel('Hoeveelheid')
+plt.ylabel('Verwachte hoeveelheid')
+plt.title('Hoeveelheid vs Verwachte hoeveelheid')
+plt.colorbar(orientation="vertical", label="Percentage Sale", extend="both")
 plt.show()
 
 # %% [markdown]
@@ -214,5 +215,11 @@ mean_squared_error(y_test_prediction_merge['quantity'], y_test_prediction_merge[
 
 # %%
 mean_absolute_error(y_test_prediction_merge['quantity'], y_test_prediction_merge['predicted_quantity'])
+
+# %% [markdown]
+# Hier kunnen we het model scoren op hoe goed het model is. Dit doen we door de reg_model te berekenen. Dus daarna de accuracy score te berekenen.
+
+# %%
+reg_model.score(x_test, y_test)
 
 
