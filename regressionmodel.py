@@ -202,6 +202,8 @@ plt.xlabel('Hoeveelheid')
 plt.ylabel('Verwachte hoeveelheid')
 plt.title('Hoeveelheid vs Verwachte hoeveelheid')
 plt.colorbar(orientation="vertical", label="Percentage Sale", extend="both")
+line_size = np.linspace(y_test_prediction_merge["quantity"].min(), y_test_prediction_merge["quantity"].max(), 100)
+plt.arrow(line_size.min(), line_size.min(), line_size.max(), line_size.max(), color='red', linestyle='-')
 plt.show()
 
 # %% [markdown]
