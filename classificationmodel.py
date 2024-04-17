@@ -147,6 +147,7 @@ metrics.accuracy_score(model_results_frame['survived'], model_results_frame['Pre
 order_details = pd.read_sql_query('SELECT * FROM order_details', conn)
 returned_item = pd.read_sql_query('SELECT * FROM returned_item', conn)
 returned_reason = pd.read_sql_query('SELECT * FROM return_reason', conn)
+product = pd.read_sql_query("SELECT * FROM product", conn)
 
 # %% [markdown]
 # Tabellen gaan we nu mergen, hiervoor heb ik laatst een functie voor gemaakt om alle tabellen te mergen en kijken we alleen of de data wel van toepassing is in de tabel:
@@ -164,12 +165,13 @@ filtered_table
 # Daarnaast moeten we ook de TRAIL kolomen verwijderen, omdat deze niet van toepassing zijn.
 
 # %%
-filtered_table = filtered_table.drop(columns=['RETURN_DATE'])
+filtered_table = filtered_table.drop(columns=["RETURN_DATE"])
 print(list(filtered_table.filter(regex='TRIAL')))
 filtered_table = filtered_table[filtered_table.columns.drop(list(filtered_table.filter(regex='TRIAL')))]
 
 # %%
 selected_columns = filtered_table
+selected_columns
 
 # %% [markdown]
 # Hier kijken we naar welke kolommen we nodig hebben voor de voorspelling. De return_description is waarschijnlijk de kolom die we nodig hebben. Aangezien die maar een waarde heeft van 5.s
@@ -183,24 +185,24 @@ for column in selected_columns.columns:
 
 # In dit geval is de kolom RETURN_DESCRIPTION_EN categorisch.
 # We passen Dummy Encoding toe op deze kolom.
-dummies_dataframe = pd.get_dummies(selected_columns, columns=['RETURN_DESCRIPTION_EN'])
+dummies_dataframe = pd.get_dummies(selected_columns.loc[:, ["RETURN_DESCRIPTION_EN"]])
 
 df = pd.concat([selected_columns, dummies_dataframe], axis=1)
 df
 
 # %%
-x = df.drop('RETURN_DESCRIPTION_EN', axis=1) # Onafhankelijke variabelen
-y = df['RETURN_DESCRIPTION_EN'] # Afhankelijke variabele
-
+x = df.drop(columns=["RETURN_REASON_CODE", "RETURN_DESCRIPTION_EN", "RETURN_DESCRIPTION_EN_Defective product", "RETURN_DESCRIPTION_EN_Incomplete product", "RETURN_DESCRIPTION_EN_Unsatisfactory product", "RETURN_DESCRIPTION_EN_Wrong product ordered", "RETURN_DESCRIPTION_EN_Wrong product shipped"]) # Onafhankelijke variabelen
+y = df[["RETURN_DESCRIPTION_EN"]] # Afhankelijke variabele
 x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.15, random_state=42)
+y
 
 # %% [markdown]
 # Nu zetten we alles in een Decision Tree Classifier en gaan we de data trainen.
 
 # %%
-dtree = DecisionTreeClassifier(max_depth=3)
-dtree = dtree.fit(x_train, y_train)
-tree.plot_tree(dtree, feature_names=x.columns)
+dtree = DecisionTreeClassifier(max_depth=4, random_state=1)
+dtree.fit(x_train, y_train)
+tree.plot_tree(dtree, feature_names=x.columns, filled=True)
 plt.show()
 scores = cross_val_score(dtree, x_train, y_train, cv=5)
 

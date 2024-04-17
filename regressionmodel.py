@@ -53,18 +53,17 @@ header = header[header.columns.drop(list(header.filter(regex="TRIAL")))]
 # Hierna mergen we de order details en header met elkaar. Dit doen we op basis van de order id. We mergen de inventory met de order details en header op basis van de product id. We mergen de forecast met de inventory op basis van de product id.
 
 # %%
-order = pd.merge(header, details, on='ORDER_NUMBER')
+order = pd.merge(header, details, on='ORDER_NUMBER').merge(product, on='PRODUCT_NUMBER')
 order
 
 # %% [markdown]
 # Hier pakken we de kolommen moeten order date converteren.
 
 # %%
+order = order.drop(columns=["RETAILER_NAME", "PRODUCT_IMAGE", "PRODUCT_NAME", "DESCRIPTION", "LANGUAGE"])
 # Selecteren van onafhankelijke variabelen en afhankelijke variabele
-order['YEAR'] = order['ORDER_DATE'].astype(str).str.split("-").str.get(0)
-order['MONTH'] = order['ORDER_DATE'].astype(str).str.split("-").str.get(1)
-order['MONTH'] = order['MONTH'].str.replace("0","")
-
+order['YEAR'] = pd.DatetimeIndex(pd.to_datetime(order["ORDER_DATE"])).year
+order['MONTH'] = pd.DatetimeIndex(pd.to_datetime(order["ORDER_DATE"])).month
 # Laat onnodige kolommen vallen
 order = order[['PRODUCT_NUMBER', 'QUANTITY', 'YEAR', 'MONTH']]
 
@@ -85,7 +84,7 @@ order = order.aggregate('sum').reset_index()
 
 # %%
 # Samenvoegen van forecast en inventory data
-inventory = inventory.rename(columns={'INVENTORY_MONTH':'MONTH','INVENTORY_YEAR':'YEAR'})
+inventory = inventory.rename(columns={"INVENTORY_MONTH": "MONTH", "INVENTORY_YEAR": "YEAR", "INVENTORY_COUNT": "INVENTORY_QUANTITY"})
 df = pd.merge(forecast, inventory, on=['MONTH', 'YEAR', 'PRODUCT_NUMBER'])
 
 # Bevestig dat er geen null of NaN waardes in de data zitten
@@ -118,7 +117,7 @@ product['PRODUCTION_COST'] = product['PRODUCTION_COST'].astype(float)
 product['MARGIN'] = product['MARGIN'].astype(float)
 product = product[['PRODUCT_NUMBER', 'PRODUCTION_COST', 'PRODUCT_TYPE_CODE', 'MARGIN']]
 
-df = pd.merge(product, df, on='PRODUCT_NUMBER')
+df = pd.merge(product, df, on='PRODUCT_NUMBER').drop_duplicates()
 
 # Bevestig dat er geen null of NaN waardes in de data zitten
 bad_data = df[df.isna().any(axis=1) | df.isnull().any(axis=1)]
@@ -175,7 +174,6 @@ reg_model
 
 # %%
 y_pred = reg_model.predict(x_test)
-y_pred
 
 # %% [markdown]
 # De voorspellingen zijn gedaan en worden nu in een dataframe omgezet, we veranderen de naam van een van de kolomen naar 'Predicted_Quantity'.

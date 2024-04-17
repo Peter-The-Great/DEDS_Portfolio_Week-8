@@ -138,6 +138,7 @@ df.groupby('Centrum', as_index = False)['Centrum'].count()
 # 
 # Om de segmenten van de verkoopafdelingen te bepalen, gaan we de volgende stappen doorlopen:
 # - We kunnen de segmenten op basis van producten categorieën en het verkoop van die producten, bepalen welke segmenten we nodig zullen hebben voor onze verkoopafdeling.
+# - We pakken daarbij ook de branches van de retailers erbij, zodat we de segmenten van de verkoopafdelingen kunnen bepalen.
 # - Daarna zullen we gebaseerd op de omzet en kosten van de verkoopafdelingen, de segmenten bepalen.
 # - Waar we dan de gemixte data in een clustering model zullen stoppen en de segmenten bepalen.
 # 
@@ -150,7 +151,7 @@ conn_crm = sqlite3.connect('data/go_crm.sqlite')
 conn_staff = sqlite3.connect('data/go_staff.sqlite')
 
 # Gegevens ophalen uit de databases (Helaas verouderd)
-# sales_branch = pd.read_sql_query("SELECT * FROM sales_branch", conn_staff)
+sales_branch = pd.read_sql_query("SELECT * FROM sales_branch", conn_staff)
 # country1 = pd.read_sql_query("SELECT * FROM country", conn_sales)
 # country2 = pd.read_sql_query("SELECT * FROM country", conn_crm)
 # territory = pd.read_sql_query("SELECT * FROM sales_territory", conn_crm)
@@ -170,6 +171,8 @@ order_details = pd.read_sql_query("SELECT * FROM order_details;", conn_sales)
 # territory.drop('TRIAL222', axis=1, inplace=True)
 orders_header.drop('TRIAL885', axis=1, inplace=True)
 order_details.drop('TRIAL879', axis=1, inplace=True)
+sales_branch.drop('TRIAL633', axis=1, inplace=True)
+sales_branch.drop(["ADDRESS1", "ADDRESS2", "POSTAL_ZONE"], axis=1)
 
 # %% [markdown]
 # Nu gaan we data mergen. Orders worden samengevoegd met details om een compleet beeld van de bestellingen te krijgen.
@@ -179,6 +182,8 @@ order_details.drop('TRIAL879', axis=1, inplace=True)
 # Verkoopgegevens worden voorbereid, zoals de omzet- en afzetgegevens per verkoopfiliaal en de verhouding van de verkoop per productlijn.
 # 
 # Bij de productlijn wordt ook dummy encoding toegepast.
+# 
+# We zullen later de branches dummies geven.
 
 # %%
 order_full = pd.merge(order_details, orders_header, on='ORDER_NUMBER')
@@ -282,15 +287,21 @@ df
 # (Helaas verouderd)
 # plt.scatter(table['TERRITORY_NAME_EN'], table['CURRENCY_NAME'], c = prediction_results, cmap = 'rainbow')
 # plt.show()
+# Nu gaan we een bar weergeven, waar alle quantiteiten worden weergegeven per sales_branch
+# Create a DataFrame with the branch names mapping
+branch_names = sales_branch[['SALES_BRANCH_CODE', 'CITY']]
+branch_names = branch_names.drop_duplicates()
+branch_names['CITY']
 
-plt.scatter(df['QUANTITY'], df['UNIT_SALE_PRICE'], color = 'k')
+plt.bar(branch_names['CITY'], df['QUANTITY'])
+plt.xticks(rotation=90)
 plt.show()
 
 # %% [markdown]
 # De centra van de clusters worden geëxtraheerd en weergegeven.
 
 # %%
-df_2d.groupby('Centrum', as_index = False)['Centrum'].count()
+df.groupby('Centrum', as_index = False)['Centrum'].count()
 
 # %% [markdown]
 # ## Clusteringmodel bouwen met meer dan 2 dimensies (alle kolommen uit de dataset)
