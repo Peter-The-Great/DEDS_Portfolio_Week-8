@@ -289,11 +289,11 @@ df
 # plt.show()
 # Nu gaan we een bar weergeven, waar alle quantiteiten worden weergegeven per sales_branch
 # Create a DataFrame with the branch names mapping
-branch_names = sales_branch[['SALES_BRANCH_CODE', 'CITY']]
+branch_names = sales_branch[['SALES_BRANCH_CODE', 'CITY', 'REGION']]
 branch_names = branch_names.drop_duplicates()
 branch_names['CITY']
 
-plt.bar(branch_names['CITY'], df['QUANTITY'])
+plt.scatter(branch_names['CITY'].astype(str), branch_names['REGION'].astype(str))
 plt.xticks(rotation=90)
 plt.show()
 
