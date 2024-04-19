@@ -60,7 +60,7 @@ merged_data
 # Train het a-priori algoritme op de samengevoegde gegevens
 frequent_itemsets = apriori(merged_data, min_support=0.01, verbose=True, use_colnames=True)
 
-# # Sorteer de frequent_itemsets op basis van de support-waarden
+# Sorteer de frequent_itemsets op basis van de support-waarden
 sorted_itemsets = frequent_itemsets.sort_values(by='support', ascending=False)
 sorted_itemsets = sorted_itemsets[sorted_itemsets['itemsets'].apply(lambda x: len(x) > 1)]
 
@@ -84,6 +84,7 @@ plt.show()
 pd.set_option('display.max_colwidth', None)
 rules = association_rules(frequent_itemsets, metric="lift", min_threshold=1)
 rules = rules.sort_values(['lift', 'confidence'], ascending=[False, False])
+rules
 filtered_rules = rules[rules.apply(lambda x: len(x['antecedents']) > 1, axis=1)]
 antecedents = filtered_rules['antecedents'].apply(lambda x: ', '.join(list(x)))
 filtered_rules

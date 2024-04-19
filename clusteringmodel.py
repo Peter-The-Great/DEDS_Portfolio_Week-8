@@ -156,8 +156,8 @@ sales_branch = pd.read_sql_query("SELECT * FROM sales_branch", conn_staff)
 # country2 = pd.read_sql_query("SELECT * FROM country", conn_crm)
 # territory = pd.read_sql_query("SELECT * FROM sales_territory", conn_crm)
 
-orders_header = pd.read_sql_query("SELECT * FROM order_header;", conn_sales)
-order_details = pd.read_sql_query("SELECT * FROM order_details;", conn_sales)
+# orders_header = pd.read_sql_query("SELECT * FROM order_header;", conn_sales)
+# order_details = pd.read_sql_query("SELECT * FROM order_details;", conn_sales)
 
 # %% [markdown]
 # Hier gaan we de data van de great outdoors inlezen en bepaalde data dropen.
@@ -169,65 +169,28 @@ order_details = pd.read_sql_query("SELECT * FROM order_details;", conn_sales)
 # sales_branch.drop('TRIAL633', axis=1, inplace=True)
 # country.drop('TRIAL219', axis=1, inplace=True)
 # territory.drop('TRIAL222', axis=1, inplace=True)
-orders_header.drop('TRIAL885', axis=1, inplace=True)
-order_details.drop('TRIAL879', axis=1, inplace=True)
+# orders_header.drop('TRIAL885', axis=1, inplace=True)
+# order_details.drop('TRIAL879', axis=1, inplace=True)
 sales_branch.drop('TRIAL633', axis=1, inplace=True)
-sales_branch.drop(["ADDRESS1", "ADDRESS2", "POSTAL_ZONE"], axis=1)
+sales_branch = sales_branch.drop(["ADDRESS1", "ADDRESS2", "POSTAL_ZONE"], axis=1)
+sales_branch
 
 # %% [markdown]
-# Nu gaan we data mergen. Orders worden samengevoegd met details om een compleet beeld van de bestellingen te krijgen.
-# 
-# Productinformatie wordt geladen en samengevoegd om een lookup-tabel te maken voor productnummers naar productcategorieën.
-# 
-# Verkoopgegevens worden voorbereid, zoals de omzet- en afzetgegevens per verkoopfiliaal en de verhouding van de verkoop per productlijn.
-# 
-# Bij de productlijn wordt ook dummy encoding toegepast.
-# 
-# We zullen later de branches dummies geven.
+# We zorgen er nu voor dat we de sales_branches city en region gaan omzetten in dummies.
 
 # %%
-order_full = pd.merge(order_details, orders_header, on='ORDER_NUMBER')
-order_full['UNIT_SALE_PRICE'] = order_full['UNIT_SALE_PRICE'].astype(float)
-order_full['UNIT_PRICE'] = order_full['UNIT_PRICE'].astype(float)
-order_full['UNIT_COST'] = order_full['UNIT_COST'].astype(float)
-
-# Lees productstabellen
-product = pd.read_sql_query("SELECT * FROM product;", conn_sales)
-product_type = pd.read_sql_query("SELECT * FROM product_type;", conn_sales)
-product_line = pd.read_sql_query("SELECT * FROM product_line;", conn_sales)
-
-# Maak lookuptabel voor productnumber -> naam productscategorie
-product_line_lookup = pd.merge(product, product_type, on='PRODUCT_TYPE_CODE')
-product_line_lookup = pd.merge(product_line_lookup, product_line, on='PRODUCT_LINE_CODE')
-product_line_lookup = product_line_lookup.loc[:,['PRODUCT_NUMBER', 'PRODUCT_LINE_EN']]
-
-# Maak dummies van product_line
-product_line_dummies = pd.get_dummies(product_line_lookup['PRODUCT_LINE_EN'])
-
-product_line_lookup = product_line_lookup.drop(['PRODUCT_LINE_EN'], axis=1)
-product_line_lookup = pd.concat([product_line_dummies, product_line_lookup], axis = 1)
-
-# Omzet/Afzetsdata
-sales_profit_data = order_full.groupby('SALES_BRANCH_CODE').aggregate('sum') #.reset_index()
-sales_profit_data = sales_profit_data[['QUANTITY', 'UNIT_COST', 'UNIT_PRICE', 'UNIT_SALE_PRICE']]
-
-# Productsverkoopdata (Verhouding van verkoop per productlijn)
-sales_product_data = pd.merge(order_full, product_line_lookup, on='PRODUCT_NUMBER')
-sales_product_data = sales_product_data[['SALES_BRANCH_CODE', 'Camping Equipment', 'Golf Equipment', 'Mountaineering Equipment', 'Outdoor Protection' , 'Personal Accessories']]
-sales_product_data = sales_product_data.groupby('SALES_BRANCH_CODE').aggregate(np.mean)
+table = sales_branch[['CITY', 'REGION']]
+df = pd.get_dummies(table)  # Dummy encoding
 
 # %% [markdown]
 # ## Clusteringmodel bouwen met 2 dimensies
 # 
-# Eerst wordt een 2D-dataset gemaakt met hoeveelheid en eenheidsprijs van de verkochte producten.
+# Eerst wordt een 2D-dataset gemaakt met de locaties van de verkoopfilialen.
 # 
 # Waar we ook dummy encoding toepassen.
 
 # %%
-table = sales_profit_data[['QUANTITY', 'UNIT_SALE_PRICE']]
-df = pd.get_dummies(table)  # Dummy encoding
-
-table = pd.concat([table, df], axis=1)
+table = pd.concat([sales_branch, df], axis=1)
 table
 
 # %% [markdown]
@@ -235,7 +198,7 @@ table
 
 # %%
 # Train het clustermodel
-kmeans = KMeans(n_clusters=4, random_state=42)
+kmeans = KMeans(n_clusters=5, random_state=42)
 prediction_results = kmeans.fit_predict(df)
 prediction_results
 
@@ -289,11 +252,11 @@ df
 # plt.show()
 # Nu gaan we een bar weergeven, waar alle quantiteiten worden weergegeven per sales_branch
 # Create a DataFrame with the branch names mapping
-branch_names = sales_branch[['SALES_BRANCH_CODE', 'CITY', 'REGION']]
-branch_names = branch_names.drop_duplicates()
-branch_names['CITY']
+# branch_names = sales_branch[['SALES_BRANCH_CODE', 'CITY', 'REGION']]
+# branch_names = branch_names.drop_duplicates()
+# branch_names['CITY']
 
-plt.scatter(branch_names['CITY'].astype(str), branch_names['REGION'].astype(str))
+plt.scatter(table["CITY"].astype(str), table["REGION"].astype(str), color="blue")
 plt.xticks(rotation=90)
 plt.show()
 
@@ -310,34 +273,15 @@ df.groupby('Centrum', as_index = False)['Centrum'].count()
 
 # %%
 kmeans = KMeans(n_clusters = 5, random_state = 42)
-prediction_results = kmeans.fit_predict(sales_product_data)
+prediction_results = kmeans.fit_predict(df)
 prediction_results
 
 # %%
-sales_product_data['Centrum'] = prediction_results
-sales_product_data
+df['Centrum'] = prediction_results
+df
 
 # %%
-sales_product_data.groupby('Centrum', as_index = False)['Centrum'].count()
-
-# %% [markdown]
-# Hier visualiseren we de gemiddelde verkoop van verschillende productcategorieën binnen elk cluster.
-
-# %%
-cluster_sales_mean = sales_product_data.groupby('Centrum').mean()
-
-# Visualisatie van gemiddelde verkoop per cluster
-plt.figure(figsize=(10, 6))
-plt.bar(cluster_sales_mean.index, cluster_sales_mean['Camping Equipment'], label='Camping Equipment')
-plt.bar(cluster_sales_mean.index, cluster_sales_mean['Golf Equipment'], bottom=cluster_sales_mean['Camping Equipment'], label='Golf Equipment')
-plt.bar(cluster_sales_mean.index, cluster_sales_mean['Mountaineering Equipment'], bottom=cluster_sales_mean['Camping Equipment']+cluster_sales_mean['Golf Equipment'], label='Mountaineering Equipment')
-plt.bar(cluster_sales_mean.index, cluster_sales_mean['Outdoor Protection'], bottom=cluster_sales_mean['Camping Equipment']+cluster_sales_mean['Golf Equipment']+cluster_sales_mean['Mountaineering Equipment'], label='Outdoor Protection')
-plt.bar(cluster_sales_mean.index, cluster_sales_mean['Personal Accessories'], bottom=cluster_sales_mean['Camping Equipment']+cluster_sales_mean['Golf Equipment']+cluster_sales_mean['Mountaineering Equipment']+cluster_sales_mean['Outdoor Protection'], label='Personal Accessories')
-plt.xlabel('Cluster')
-plt.ylabel('Gemiddelde verkoop')
-plt.title('Gemiddelde verkoop per cluster per productcategorie')
-plt.legend()
-plt.show()
+df.groupby('Centrum', as_index = False)['Centrum'].count()
 
 # %% [markdown]
 # ## Evaluatie van de clustering
@@ -346,34 +290,63 @@ plt.show()
 # Hier gaan we de inter- en intraclusterafstand berekenen voor verschillende k's.
 
 # %%
-# Lijst om interclusterafstanden op te slaan
-intercluster_distances = []
+from typing import Literal, Any
+intercluster_distance: Literal[0] = 0
+intracluster_distance: Literal[0] = 0
 
-# Lijst om intraclusterafstanden op te slaan
-intracluster_distances = []
+common_columns: Any = df.columns.intersection(kmeans_centra.columns)
 
-# Lijst van verschillende k's om te evalueren
-k_values = [2, 3, 4, 5, 6]
+for centrumindex, _ in kmeans_centra[common_columns].iterrows():
+    for src_index, _ in df[common_columns].iterrows():
+        if df.at[src_index, "Centrum"] == centrumindex:
+            diff = df.loc[src_index, common_columns] - kmeans_centra.loc[centrumindex, common_columns]
+            distance = np.linalg.norm(diff[pd.to_numeric(diff, errors="coerce").notnull()])
+            intracluster_distance += distance
+        else:
+            diff = df.loc[src_index, common_columns] - kmeans_centra.loc[centrumindex, common_columns]
+            distance = np.linalg.norm(diff[pd.to_numeric(diff, errors="coerce").notnull()])
+            intercluster_distance += distance
 
-for k in k_values:
-    # K-means clusteringmodel toepassen
-    kmeans = KMeans(n_clusters=k, random_state=42)
-    prediction_results = kmeans.fit_predict(sales_product_data)
+print(f"Intercluster distance (more is better): {intercluster_distance}")
+print(f"Intracluster distance (less is better): {intracluster_distance}")
+
+# %% [markdown]
+# Nu voeren we deze analyse uit om het optimale aantal clusters (k) voor K-Means-clustering te bepalen met behulp van de elleboogmethode. Hierdoor kunnen we de inter- en intraclusterafstand optimaal berekenen voor verschillende k's.
+
+# %%
+intercluster_distances: list = []
+intracluster_distances: list = []
+k_options = range(1, 11)
+
+for k in k_options:
+    kmeans: KMeans = KMeans(n_clusters=k, random_state=42)
+    df["Centrum"] = kmeans.fit_predict(df)
+    kmeans_center = pd.DataFrame(kmeans.cluster_centers_, columns=df.columns)
     
-    # Interclusterafstand
-    intercluster_distance = np.sum(np.min(kmeans.transform(sales_product_data), axis=1)) / sales_product_data.shape[0]
+    intercluster_distance: Literal[0] = 0
+    intracluster_distance: Literal[0] = 0
+
+    common_columns: Any = df.columns.intersection(kmeans_center.columns)
+
+    for centrumindex, _ in kmeans_center[common_columns].iterrows():
+        for src_index, _ in df[common_columns].iterrows():
+            if df.at[src_index, "Centrum"] == centrumindex:
+                diff = df.loc[src_index, common_columns] - kmeans_center.loc[centrumindex, common_columns]
+                distance = np.linalg.norm(diff[pd.to_numeric(diff, errors="coerce").notnull()])
+                intracluster_distance += distance
+            else:
+                diff = df.loc[src_index, common_columns] - kmeans_center.loc[centrumindex, common_columns]
+                distance = np.linalg.norm(diff[pd.to_numeric(diff, errors="coerce").notnull()])
+                intercluster_distance += distance
+
     intercluster_distances.append(intercluster_distance)
-    
-    # Intraclusterafstand
-    intracluster_distance = kmeans.inertia_ / sales_product_data.shape[0]
     intracluster_distances.append(intracluster_distance)
 
-# Visualisatie van inter- en intraclusterafstanden voor verschillende k's
-plt.plot(k_values, intercluster_distances, marker='o', label='Intercluster distance')
-plt.plot(k_values, intracluster_distances, marker='x', label='Intracluster distance')
-plt.xlabel('Number of clusters (k)')
-plt.ylabel('Distance')
-plt.title('Inter- and Intracluster distances for different k values')
+plt.plot(k_options, intercluster_distances, marker="o", label="Intercluster afstand", color="g")
+plt.plot(k_options, intracluster_distances, marker="x", label="Intracluster afstand", color="b")
+plt.xlabel("Hoeveelheid van k-clusters")
+plt.ylabel("Cluster afstand")
+plt.title("Inter- en Intracluster afstand")
 plt.legend()
 plt.show()
 
